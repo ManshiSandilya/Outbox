@@ -97,13 +97,12 @@ slackRouter.get('/install', install);
 slackRouter.get('/callback', async (req, res, next) => {
   try {
     const code = typeof req.query.code === 'string' ? req.query.code : undefined;
-    const state = typeof req.query.state === 'string' ? req.query.state : undefined;
-    const installationError = typeof req.query.error === 'string' ? req.query.error : undefined;
-    const verifiedState = state ? readState(state) : undefined;
+    const tenantId = verifiedState?.tenantId ?? req.tenantId;
 
-    if (installationError || !code || !verifiedState) {
+    if (installationError || !code) {
       return res.status(400).json({ error: installationError ?? 'Invalid Slack OAuth callback' });
     }
+
 
     const tokenResponse = await fetch(SLACK_ACCESS_URL, {
       method: 'POST',
@@ -122,7 +121,8 @@ slackRouter.get('/callback', async (req, res, next) => {
     }
 
     const tenant = await prisma.tenant.update({
-      where: { id: verifiedState.tenantId },
+      where: { id: tenantId },
+
       data: {
         slackAccessToken: token.access_token,
         slackWebhookUrl: token.incoming_webhook?.url ?? null,
