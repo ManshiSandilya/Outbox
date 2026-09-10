@@ -101,7 +101,20 @@ export async function indexEmail(email: EmailForIndex): Promise<void> {
   }
 }
 
+export async function syncAllEmailsToElasticsearch(): Promise<void> {
+  try {
+    const allEmails = await prisma.email.findMany({
+      include: { sender: true },
+    });
+    await Promise.all(allEmails.map((email) => indexEmail(email)));
+  } catch (error) {
+    console.warn('Elasticsearch bulk sync skipped:', error);
+  }
+}
+
 export async function searchEmails(query: string): Promise<unknown[]> {
+  void syncAllEmailsToElasticsearch().catch(() => null);
+
   try {
     await initializeEmailsIndex();
     const response = await fetch(`${elasticsearchUrl}/${EMAILS_INDEX}/_search`, {
@@ -120,11 +133,15 @@ export async function searchEmails(query: string): Promise<unknown[]> {
 
     if (response.ok) {
       const result = (await response.json()) as { hits?: { hits?: Array<{ _id: string; _source: unknown }> } };
-      return (result.hits?.hits ?? []).map((hit) => ({ id: hit._id, ...asObject(hit._source) }));
+      const hits = (result.hits?.hits ?? []).map((hit) => ({ id: hit._id, ...asObject(hit._source) }));
+      if (hits.length > 0) {
+        return hits;
+      }
     }
   } catch (error) {
     console.warn('Elasticsearch search fallback to DB:', error instanceof Error ? error.message : error);
   }
+
 
   // Database fallback for search
   const dbEmails = await prisma.email.findMany({
