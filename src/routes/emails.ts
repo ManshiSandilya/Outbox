@@ -8,6 +8,9 @@ import { emailQueue } from '../lib/email-queue';
 import { indexEmail, searchEmails } from '../services/email-search';
 
 const MAX_RECIPIENTS_PER_REQUEST = 1_000;
+const emailListQuerySchema = z.object({
+  status: z.enum(['scheduled', 'sent|failed']),
+});
 
 export const scheduleEmailSchema = z.object({
   senderId: z.string().uuid(),
@@ -26,6 +29,34 @@ export const scheduleEmailSchema = z.object({
 });
 
 export const emailRouter = Router();
+
+emailRouter.get('/', async (req, res, next) => {
+  const parsed = emailListQuerySchema.safeParse({ status: req.query.status });
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'status must be scheduled or sent|failed' });
+  }
+
+  try {
+    const statuses = parsed.data.status === 'scheduled' ? [EmailStatus.SCHEDULED] : [EmailStatus.SENT, EmailStatus.FAILED];
+    const emails = await prisma.email.findMany({
+      where: { sender: { tenantId: req.tenantId }, status: { in: statuses } },
+      orderBy: parsed.data.status === 'scheduled' ? { scheduledTime: 'asc' } : { sentTime: 'desc' },
+      select: { recipient: true, subject: true, scheduledTime: true, sentTime: true, status: true },
+    });
+
+    return res.status(200).json({
+      emails: emails.map((email) => ({
+        email: email.recipient,
+        subject: email.subject,
+        scheduled_time: email.scheduledTime.toISOString(),
+        sent_time: email.sentTime?.toISOString() ?? null,
+        status: email.status.toLowerCase(),
+      })),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 emailRouter.post('/schedule', async (req, res, next) => {
   const parsed = scheduleEmailSchema.safeParse(req.body);
