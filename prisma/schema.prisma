@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailStatus {
+  SCHEDULED
+  SENT
+  FAILED
+}
+
+enum RateLimitScope {
+  TENANT
+  SENDER
+}
+
+model Tenant {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @unique @db.VarChar(255)
+  slackAccessToken String?           @map("slack_access_token") @db.Text
+  slackWebhookUrl  String?           @map("slack_webhook_url") @db.Text
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  senders          Sender[]
+  rateLimitConfigs RateLimitConfig[]
+
+  @@map("tenants")
+}
+
+model Sender {
+  id                   String            @id @default(uuid()) @db.Uuid
+  tenantId             String            @map("tenant_id") @db.Uuid
+  email                String            @db.VarChar(320)
+  displayName          String?           @map("display_name") @db.VarChar(255)
+  smtpHost             String            @map("smtp_host") @db.VarChar(255)
+  smtpPort             Int               @map("smtp_port") @db.SmallInt
+  smtpUsername         String            @map("smtp_username") @db.VarChar(255)
+  smtpPasswordEncrypted String            @map("smtp_password_encrypted") @db.Text
+  smtpSecure           Boolean           @default(true) @map("smtp_secure")
+  isActive             Boolean           @default(true) @map("is_active")
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant               Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  emails               Email[]
+  rateLimitConfigs     RateLimitConfig[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("senders")
+}
+
+model Email {
+  id             String      @id @default(uuid()) @db.Uuid
+  recipient      String      @db.VarChar(320)
+  subject        String      @db.Text
+  body           String      @db.Text
+  scheduledTime  DateTime    @map("scheduled_time") @db.Timestamptz(6)
+  sentTime       DateTime?   @map("sent_time") @db.Timestamptz(6)
+  status         EmailStatus @default(SCHEDULED)
+  senderId       String      @map("sender_id") @db.Uuid
+  campaignId     String      @map("campaign_id") @db.VarChar(255)
+  idempotencyKey String      @unique @map("idempotency_key") @db.VarChar(512)
+  failureReason  String?     @map("failure_reason") @db.Text
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sender         Sender      @relation(fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([status, scheduledTime])
+  @@index([senderId, status])
+  @@index([campaignId])
+  @@map("emails")
+}
+
+model RateLimitConfig {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @map("tenant_id") @db.Uuid
+  senderId      String?        @map("sender_id") @db.Uuid
+  scope         RateLimitScope
+  maxPerHour    Int            @map("max_per_hour")
+  minDelayMs    Int            @map("min_delay_ms")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sender        Sender?        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("rate_limit_configs")
+}

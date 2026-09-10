@@ -1,0 +1,20 @@
+# Dependencies and generated build output
+node_modules/
+.next/
+dist/
+coverage/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and editor/OS artifacts
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local Prisma development databases
+prisma/*.db
+prisma/*.db-journal
