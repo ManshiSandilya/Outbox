@@ -151,31 +151,25 @@ emailRouter.post('/schedule', async (req, res, next) => {
     );
 
     const now = Date.now();
-    await Promise.all(
-      createdRows.map((email) => {
-        const sendAt = email.scheduledTime.getTime();
-
-        return Promise.race([
-          emailQueue.add(
-            'send-email',
-            { emailId: email.id },
-            {
-              jobId: email.idempotencyKey.replace(/:/g, '_'),
-
-              delay: Math.max(0, sendAt - now),
-            },
-          ),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Redis connection timeout')), 1500),
-          ),
-        ]).catch((queueError) => {
-          console.warn(
-            'BullMQ queue enqueue deferred/warning:',
-            queueError instanceof Error ? queueError.message : queueError,
-          );
-        });
-      }),
-    );
+    for (const email of createdRows) {
+      const sendAt = email.scheduledTime.getTime();
+      const jobId = email.idempotencyKey.replace(/:/g, '_');
+      try {
+        await emailQueue.add(
+          'send-email',
+          { emailId: email.id },
+          {
+            jobId,
+            delay: Math.max(0, sendAt - now),
+          },
+        );
+      } catch (queueError) {
+        console.warn(
+          'BullMQ queue enqueue deferred/warning:',
+          queueError instanceof Error ? queueError.message : queueError,
+        );
+      }
+    }
 
     return res.status(201).json({
       campaignId,

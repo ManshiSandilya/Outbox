@@ -1,3 +1,5 @@
+import { prisma } from '../lib/prisma';
+
 const EMAILS_INDEX = 'emails';
 const elasticsearchUrl = (process.env.ELASTICSEARCH_URL ?? 'http://127.0.0.1:9200').replace(/\/$/, '');
 
