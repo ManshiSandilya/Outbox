@@ -133,3 +133,54 @@ npm run dev
 
 ### Dashboard
 - `GET /admin/queues` — Bull Board interface for queue inspection.
+
+---
+
+## 🌐 Production Deployment Guide
+
+### Option 1: Render / Railway Blueprint Deployment (Recommended)
+
+#### 1. Backend API & BullMQ Worker (Render)
+1. Push your repository to GitHub (`https://github.com/ManshiSandilya/Outbox`).
+2. Log into [Render Dashboard](https://dashboard.render.com).
+3. Click **New +** -> **Blueprint**.
+4. Select your `Outbox` repository. Render automatically reads [render.yaml](file:///d:/outbox/render.yaml) and provisions:
+   - `outbox-api` (Express Web Service running `npm run start`)
+   - `outbox-worker` (BullMQ Worker running `npm run start:worker`)
+   - `outbox-redis` (Managed Redis instance)
+5. Fill in required environment variables in Render:
+   - `DATABASE_URL`: Your PostgreSQL connection string (Neon DB / Render DB).
+   - `FRONTEND_ORIGIN`: Your deployed Vercel URL (e.g. `https://outbox-frontend.vercel.app`).
+   - `SLACK_REDIRECT_URI`: `https://<your-render-api-url>/api/slack/callback`.
+
+#### 2. Frontend SPA (Vercel)
+1. Log into [Vercel Dashboard](https://vercel.com).
+2. Click **Add New Project** and import your GitHub repository.
+3. Set **Root Directory** to `frontend`.
+4. Configure Environment Variables:
+   - `VITE_API_URL`: Your deployed Render API URL (e.g. `https://outbox-api.onrender.com`).
+   - `VITE_GOOGLE_CLIENT_ID`: Your Google OAuth Client ID.
+5. Click **Deploy**. Vercel uses [frontend/vercel.json](file:///d:/outbox/frontend/vercel.json) for automatic SPA client-side routing.
+
+---
+
+### Option 2: Docker Container Deployment (VPS / DigitalOcean / AWS)
+
+Build and run using the included [Dockerfile](file:///d:/outbox/Dockerfile):
+
+```bash
+# Build production Docker image
+docker build -t outbox-backend .
+
+# Run Express API
+docker run -d --name outbox-api \
+  -p 3000:3000 \
+  --env-file .env \
+  outbox-backend npm run start
+
+# Run BullMQ Worker
+docker run -d --name outbox-worker \
+  --env-file .env \
+  outbox-backend npm run start:worker
+```
+

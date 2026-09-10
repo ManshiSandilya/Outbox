@@ -1,0 +1,81 @@
+services:
+  - type: web
+    name: outbox-api
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: outbox-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: outbox-redis
+          property: port
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: SLACK_CLIENT_ID
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+      - key: SLACK_REDIRECT_URI
+        sync: false
+      - key: SLACK_OAUTH_STATE_SECRET
+        generateValue: true
+      - key: SEED_SMTP_HOST
+        value: smtp.ethereal.email
+      - key: SEED_SMTP_PORT
+        value: "587"
+      - key: SEED_SMTP_USERNAME
+        sync: false
+      - key: SEED_SMTP_PASSWORD_ENCRYPTED
+        sync: false
+      - key: SEED_SENDER_EMAIL
+        sync: false
+      - key: MAX_EMAILS_PER_HOUR_PER_SENDER
+        value: "100"
+      - key: WORKER_CONCURRENCY
+        value: "5"
+
+  - type: worker
+    name: outbox-worker
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: outbox-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: outbox-redis
+          property: port
+      - key: MAX_EMAILS_PER_HOUR_PER_SENDER
+        value: "100"
+      - key: WORKER_CONCURRENCY
+        value: "5"
+
+  - type: redis
+    name: outbox-redis
+    ipAllowList: []
+    plan: free
