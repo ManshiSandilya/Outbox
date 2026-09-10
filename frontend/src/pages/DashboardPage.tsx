@@ -35,19 +35,64 @@ export function DashboardPage() {
   const [isLoadingEmails, setIsLoadingEmails] = useState(true);
   const [emailLoadError, setEmailLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isCurrent = true;
-    setIsLoadingEmails(true);
+  const loadEmails = (showLoading = false) => {
+    if (showLoading) setIsLoadingEmails(true);
     setEmailLoadError(null);
-    void fetchEmails(activeTab === 'scheduled' ? 'scheduled' : 'sent|failed')
-      .then((response) => { if (isCurrent) setEmails(response.emails); })
-      .catch(() => { if (isCurrent) setEmailLoadError('Unable to load emails right now.'); })
-      .finally(() => { if (isCurrent) setIsLoadingEmails(false); });
-    return () => { isCurrent = false; };
+    return fetchEmails(activeTab === 'scheduled' ? 'scheduled' : 'sent|failed')
+      .then((response) => { setEmails(response.emails); })
+      .catch(() => { setEmailLoadError('Unable to load emails right now.'); })
+      .finally(() => { setIsLoadingEmails(false); });
+  };
+
+  useEffect(() => {
+    void loadEmails(true);
+    const interval = setInterval(() => {
+      void loadEmails(false);
+    }, 3000);
+    return () => clearInterval(interval);
   }, [activeTab]);
+
   if (!user) return null;
 
   const handleLogout = async () => { await logout(); navigate('/login', { replace: true }); };
   const columns = activeTab === 'scheduled' ? scheduledColumns : sentColumns;
-  return <div className="min-h-screen bg-slate-50"><Header user={user} onLogout={() => void handleLogout()} onCompose={() => setComposeOpen(true)} /><main className="mx-auto max-w-6xl px-6 py-8"><Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} /><section className="mt-6">{isLoadingEmails ? <TableSkeleton /> : emailLoadError ? <p className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{emailLoadError}</p> : emails.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">No {activeTab === 'scheduled' ? 'scheduled' : 'sent'} emails yet.</p> : <Table columns={columns} rows={emails} getRowKey={(email, index) => `${email.email}-${email.scheduled_time}-${index}`} />}</section></main><ComposeEmailModal isOpen={isComposeOpen} onClose={() => setComposeOpen(false)} onToast={(message, tone) => setToast({ message, tone })} />{toast && <div role="status" className={`fixed bottom-6 right-6 z-[60] rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-lg ${toast.tone === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>{toast.message}<button type="button" className="ml-3 text-white/80 hover:text-white" onClick={() => setToast(null)} aria-label="Dismiss notification">Dismiss</button></div>}</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Header user={user} onLogout={() => void handleLogout()} onCompose={() => setComposeOpen(true)} />
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+        <section className="mt-6">
+          {isLoadingEmails && emails.length === 0 ? (
+            <TableSkeleton />
+          ) : emailLoadError ? (
+            <p className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{emailLoadError}</p>
+          ) : emails.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">
+              No {activeTab === 'scheduled' ? 'scheduled' : 'sent'} emails yet.
+            </p>
+          ) : (
+            <Table
+              columns={columns}
+              rows={emails}
+              getRowKey={(email, index) => `${email.email}-${email.scheduled_time}-${index}`}
+            />
+          )}
+        </section>
+      </main>
+      <ComposeEmailModal
+        isOpen={isComposeOpen}
+        onClose={() => setComposeOpen(false)}
+        onScheduled={() => void loadEmails(false)}
+        onToast={(message, tone) => setToast({ message, tone })}
+      />
+      {toast && (
+        <div role="status" className={`fixed bottom-6 right-6 z-[60] rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-lg ${toast.tone === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>
+          {toast.message}
+          <button type="button" className="ml-3 text-white/80 hover:text-white" onClick={() => setToast(null)} aria-label="Dismiss notification">Dismiss</button>
+        </div>
+      )}
+    </div>
+  );
 }
+

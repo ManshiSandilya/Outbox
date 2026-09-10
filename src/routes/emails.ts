@@ -41,7 +41,8 @@ emailRouter.get('/', async (req, res, next) => {
     const statuses = parsed.data.status === 'scheduled' ? [EmailStatus.SCHEDULED] : [EmailStatus.SENT, EmailStatus.FAILED];
     const emails = await prisma.email.findMany({
       where: { sender: { tenantId: req.tenantId }, status: { in: statuses } },
-      orderBy: parsed.data.status === 'scheduled' ? { scheduledTime: 'asc' } : { sentTime: 'desc' },
+      orderBy: parsed.data.status === 'scheduled' ? { scheduledTime: 'asc' } : { updatedAt: 'desc' },
+
       select: { recipient: true, subject: true, scheduledTime: true, sentTime: true, status: true },
     });
 

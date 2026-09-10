@@ -7,6 +7,7 @@ import { Modal } from './ui/Modal';
 type ComposeEmailModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  onScheduled?: () => void;
   onToast: (message: string, tone: 'success' | 'error') => void;
 };
 
@@ -16,7 +17,8 @@ function extractEmails(value: string): string[] {
   return [...new Set((value.match(emailPattern) ?? []).map((email) => email.toLowerCase()))];
 }
 
-export function ComposeEmailModal({ isOpen, onClose, onToast }: ComposeEmailModalProps) {
+export function ComposeEmailModal({ isOpen, onClose, onScheduled, onToast }: ComposeEmailModalProps) {
+
   const [senderId, setSenderId] = useState('manshisandilya6961@gmail.com');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -63,7 +65,9 @@ export function ComposeEmailModal({ isOpen, onClose, onToast }: ComposeEmailModa
       setRecipientsText('');
       setSubject('');
       setBody('');
+      onScheduled?.();
       onClose();
+
     } catch (error) {
       onToast(error instanceof Error ? error.message : 'Unable to schedule emails.', 'error');
     } finally {
