@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { fetchEmails, type EmailListItem } from '../api';
+import { fetchEmails, searchEmails, type EmailListItem } from '../api';
+
 import { ComposeEmailModal } from '../components/ComposeEmailModal';
 import { Header } from '../components/layout/Header';
 import { Tabs } from '../components/ui/Tabs';
@@ -35,7 +36,10 @@ export function DashboardPage() {
   const [isLoadingEmails, setIsLoadingEmails] = useState(true);
   const [emailLoadError, setEmailLoadError] = useState<string | null>(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   const loadEmails = (showLoading = false) => {
+    if (searchQuery.trim()) return;
     if (showLoading) setIsLoadingEmails(true);
     setEmailLoadError(null);
     return fetchEmails(activeTab === 'scheduled' ? 'scheduled' : 'sent|failed')
@@ -45,12 +49,28 @@ export function DashboardPage() {
   };
 
   useEffect(() => {
-    void loadEmails(true);
-    const interval = setInterval(() => {
-      void loadEmails(false);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [activeTab]);
+    if (!searchQuery.trim()) {
+      void loadEmails(true);
+    }
+  }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      const interval = setInterval(() => { void loadEmails(false); }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, searchQuery]);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) return;
+    setIsLoadingEmails(true);
+    setEmailLoadError(null);
+    void searchEmails(query.trim())
+      .then((response) => { setEmails(response.emails); })
+      .catch(() => { setEmailLoadError('Search failed.'); })
+      .finally(() => { setIsLoadingEmails(false); });
+  };
 
   if (!user) return null;
 
@@ -61,8 +81,20 @@ export function DashboardPage() {
     <div className="min-h-screen bg-slate-50">
       <Header user={user} onLogout={() => void handleLogout()} onCompose={() => setComposeOpen(true)} />
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+          <div className="w-full sm:w-72">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search emails (Elasticsearch)..."
+              className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+        </div>
         <section className="mt-6">
+
           {isLoadingEmails && emails.length === 0 ? (
             <TableSkeleton />
           ) : emailLoadError ? (

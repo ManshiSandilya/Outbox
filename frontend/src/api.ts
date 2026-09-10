@@ -17,3 +17,10 @@ export async function fetchEmails(status: 'scheduled' | 'sent|failed'): Promise<
   if (!response.ok) throw new Error('Unable to load emails.');
   return (await response.json()) as EmailListResponse;
 }
+
+export async function searchEmails(query: string): Promise<EmailListResponse> {
+  const response = await apiFetch(`/api/emails/search?q=${encodeURIComponent(query)}`);
+  if (!response.ok) throw new Error('Unable to search emails.');
+  return (await response.json()) as EmailListResponse;
+}
+
