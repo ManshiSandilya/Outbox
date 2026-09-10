@@ -18,3 +18,8 @@ Thumbs.db
 # Local Prisma development databases
 prisma/*.db
 prisma/*.db-journal
+
+# TypeScript incremental/build artifacts
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

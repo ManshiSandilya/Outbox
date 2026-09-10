@@ -32,7 +32,10 @@ function nextHourWindow(now: Date): number {
 }
 
 async function reserveHourlySend(senderId: string): Promise<number> {
-  const redis = await emailQueue.client;
+  const redis = await emailQueue.client as unknown as {
+    incr: (key: string) => Promise<number>;
+    expire: (key: string, seconds: number) => Promise<number>;
+  };
   const key = `ratelimit:${senderId}:${hourBucket(new Date())}`;
   const count = await redis.incr(key);
 
