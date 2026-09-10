@@ -21,7 +21,8 @@ export async function reconcileScheduledEmails(): Promise<void> {
 
   await Promise.all(
     scheduledEmails.map(async (email) => {
-      const existingJob = await emailQueue.getJob(email.idempotencyKey);
+      const jobId = email.idempotencyKey.replace(/:/g, '_');
+      const existingJob = await emailQueue.getJob(jobId);
       if (existingJob) {
         return;
       }
@@ -30,12 +31,11 @@ export async function reconcileScheduledEmails(): Promise<void> {
         'send-email',
         { emailId: email.id },
         {
-          // The DB key is also the BullMQ job ID, making a concurrent startup
-          // reconciliation safe even if two processes observe the same gap.
-          jobId: email.idempotencyKey,
+          jobId,
           delay: Math.max(0, email.scheduledTime.getTime() - Date.now()),
         },
       );
+
     }),
   );
 }

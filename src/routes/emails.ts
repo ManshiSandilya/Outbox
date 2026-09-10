@@ -155,7 +155,8 @@ emailRouter.post('/schedule', async (req, res, next) => {
             'send-email',
             { emailId: email.id },
             {
-              jobId: email.idempotencyKey,
+              jobId: email.idempotencyKey.replace(/:/g, '_'),
+
               delay: Math.max(0, sendAt - now),
             },
           ),
