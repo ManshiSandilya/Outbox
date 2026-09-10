@@ -10,12 +10,22 @@ export const app = express();
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const allowedOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
-  if (origin === allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  const allowedOrigin = process.env.FRONTEND_ORIGIN;
+  
+  if (origin) {
+    const isAllowed =
+      !allowedOrigin ||
+      origin === allowedOrigin ||
+      origin.endsWith('.vercel.app') ||
+      origin.startsWith('http://localhost') ||
+      origin.startsWith('http://127.0.0.1');
+
+    if (isAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    }
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   return next();
