@@ -81,9 +81,10 @@ const install: RequestHandler = (req, res, next) => {
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: process.env.SLACK_REDIRECT_URI || 'http://localhost:3000/api/slack/callback',
-      user_scope: 'incoming-webhook',
+      scope: 'incoming-webhook',
       state: createState(req.tenantId),
     });
+
 
     return res.redirect(`${SLACK_AUTHORIZE_URL}?${params.toString()}`);
   } catch (error) {
