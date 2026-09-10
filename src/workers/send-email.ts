@@ -123,7 +123,12 @@ export const sendEmailWorker = new Worker<SendEmailJob>(
   { connection: redisConnection, concurrency: workerConcurrency },
 );
 
-void reconcileScheduledEmailsOnStartup().catch((error: unknown) => {
-  console.error('Scheduled-email reconciliation failed during worker startup', error);
-  process.exitCode = 1;
-});
+console.log('[Worker] Email scheduler worker started.');
+void reconcileScheduledEmailsOnStartup()
+  .then(() => {
+    console.log('[Worker] reconcileScheduledEmailsOnStartup() executed successfully on boot.');
+  })
+  .catch((error: unknown) => {
+    console.error('Scheduled-email reconciliation failed during worker startup', error);
+    process.exitCode = 1;
+  });
