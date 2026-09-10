@@ -72,9 +72,15 @@ export const slackRouter = Router();
 
 const install: RequestHandler = (req, res, next) => {
   try {
+    const clientId = process.env.SLACK_CLIENT_ID;
+    if (!clientId || clientId === 'your-slack-client-id') {
+      return res.status(400).json({
+        error: 'Slack OAuth is not configured. Please add real SLACK_CLIENT_ID and SLACK_CLIENT_SECRET to your .env file.',
+      });
+    }
     const params = new URLSearchParams({
-      client_id: requiredEnv('SLACK_CLIENT_ID'),
-      redirect_uri: requiredEnv('SLACK_REDIRECT_URI'),
+      client_id: clientId,
+      redirect_uri: process.env.SLACK_REDIRECT_URI || 'http://localhost:3000/api/slack/callback',
       scope: 'incoming-webhook',
       state: createState(req.tenantId),
     });
