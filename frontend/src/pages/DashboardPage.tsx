@@ -42,7 +42,7 @@ export function DashboardPage() {
     if (searchQuery.trim()) return;
     if (showLoading) setIsLoadingEmails(true);
     setEmailLoadError(null);
-    return fetchEmails(activeTab === 'scheduled' ? 'scheduled' : 'sent|failed')
+    return fetchEmails('all')
       .then((response) => { setEmails(response.emails); })
       .catch(() => { setEmailLoadError('Unable to load emails right now.'); })
       .finally(() => { setIsLoadingEmails(false); });
@@ -56,10 +56,10 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!searchQuery.trim()) {
-      const interval = setInterval(() => { void loadEmails(false); }, 3000);
+      const interval = setInterval(() => { void loadEmails(false); }, 1000);
       return () => clearInterval(interval);
     }
-  }, [activeTab, searchQuery]);
+  }, [searchQuery]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);

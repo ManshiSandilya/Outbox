@@ -12,8 +12,9 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   });
 }
 
-export async function fetchEmails(status: 'scheduled' | 'sent|failed'): Promise<EmailListResponse> {
-  const response = await apiFetch(`/api/emails?status=${encodeURIComponent(status)}`);
+export async function fetchEmails(status?: 'scheduled' | 'sent|failed' | 'all'): Promise<EmailListResponse> {
+  const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+  const response = await apiFetch(`/api/emails${query}`);
   if (!response.ok) throw new Error('Unable to load emails.');
   return (await response.json()) as EmailListResponse;
 }

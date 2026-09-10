@@ -32,17 +32,22 @@ export const scheduleEmailSchema = z.object({
 export const emailRouter = Router();
 
 emailRouter.get('/', async (req, res, next) => {
-  const parsed = emailListQuerySchema.safeParse({ status: req.query.status });
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'status must be scheduled or sent|failed' });
-  }
+  const statusQuery = typeof req.query.status === 'string' ? req.query.status : undefined;
 
   try {
-    const statuses = parsed.data.status === 'scheduled' ? [EmailStatus.SCHEDULED] : [EmailStatus.SENT, EmailStatus.FAILED];
-    const emails = await prisma.email.findMany({
-      where: { sender: { tenantId: req.tenantId }, status: { in: statuses } },
-      orderBy: parsed.data.status === 'scheduled' ? { scheduledTime: 'asc' } : { updatedAt: 'desc' },
+    let statuses: EmailStatus[] | undefined;
+    if (statusQuery === 'scheduled') {
+      statuses = [EmailStatus.SCHEDULED];
+    } else if (statusQuery === 'sent|failed') {
+      statuses = [EmailStatus.SENT, EmailStatus.FAILED];
+    }
 
+    const emails = await prisma.email.findMany({
+      where: {
+        sender: { tenantId: req.tenantId },
+        ...(statuses ? { status: { in: statuses } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
       select: { recipient: true, subject: true, scheduledTime: true, sentTime: true, status: true },
     });
 
