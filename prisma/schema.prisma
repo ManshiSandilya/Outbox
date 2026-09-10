@@ -23,6 +23,7 @@ model Tenant {
   name             String            @unique @db.VarChar(255)
   slackAccessToken String?           @map("slack_access_token") @db.Text
   slackWebhookUrl  String?           @map("slack_webhook_url") @db.Text
+  slackChannelId   String?           @map("slack_channel_id") @db.VarChar(64)
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   senders          Sender[]

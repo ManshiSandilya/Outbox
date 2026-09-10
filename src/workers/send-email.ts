@@ -5,7 +5,7 @@ import { emailQueue, redisConnection } from '../lib/email-queue';
 import { prisma } from '../lib/prisma';
 import { reindexEmail } from '../services/email-search';
 import { reconcileScheduledEmailsOnStartup } from '../services/reconcile-scheduled-emails';
-import { notifyRateLimitReached } from '../services/slack';
+import { notifySlack } from '../services/slack';
 
 type SendEmailJob = { emailId: string };
 
@@ -61,11 +61,10 @@ async function processSendEmail(
   if (hourlyCount > maxEmailsPerHour) {
     const deferredUntil = nextHourWindow(new Date()) + email.sequence;
 
-    await notifyRateLimitReached({
-      tenantId: email.sender.tenantId,
-      senderId: email.senderId,
-      maxPerHour: maxEmailsPerHour,
-    });
+    await notifySlack(
+      email.sender.tenantId,
+      `Email rate limit reached for sender ${email.sender.email}: ${maxEmailsPerHour} per hour.`,
+    );
 
     // The active job already owns this deterministic jobId, so re-adding it
     // would be ignored by BullMQ. Moving the same locked job preserves its
