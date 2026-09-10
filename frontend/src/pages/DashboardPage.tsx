@@ -77,6 +77,13 @@ export function DashboardPage() {
   const handleLogout = async () => { await logout(); navigate('/login', { replace: true }); };
   const columns = activeTab === 'scheduled' ? scheduledColumns : sentColumns;
 
+  const displayEmails = emails.filter((email) => {
+    if (activeTab === 'scheduled') {
+      return email.status.toLowerCase() === 'scheduled';
+    }
+    return email.status.toLowerCase() === 'sent' || email.status.toLowerCase() === 'failed';
+  });
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Header user={user} onLogout={() => void handleLogout()} onCompose={() => setComposeOpen(true)} />
@@ -95,18 +102,18 @@ export function DashboardPage() {
         </div>
         <section className="mt-6">
 
-          {isLoadingEmails && emails.length === 0 ? (
+          {isLoadingEmails && displayEmails.length === 0 ? (
             <TableSkeleton />
           ) : emailLoadError ? (
             <p className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{emailLoadError}</p>
-          ) : emails.length === 0 ? (
+          ) : displayEmails.length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">
               No {activeTab === 'scheduled' ? 'scheduled' : 'sent'} emails yet.
             </p>
           ) : (
             <Table
               columns={columns}
-              rows={emails}
+              rows={displayEmails}
               getRowKey={(email, index) => `${email.email}-${email.scheduled_time}-${index}`}
             />
           )}
