@@ -4,9 +4,12 @@ const prisma = new PrismaClient();
 
 async function main() {
   const tenant = await prisma.tenant.upsert({
-    where: { name: 'Development Tenant' },
-    update: {},
-    create: { name: 'Development Tenant' },
+    where: { id: '00000000-0000-0000-0000-000000000001' },
+    update: { name: 'Development Tenant' },
+    create: {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Development Tenant',
+    },
   });
 
   const sender = await prisma.sender.upsert({
