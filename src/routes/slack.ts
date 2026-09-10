@@ -124,18 +124,31 @@ slackRouter.get('/callback', async (req, res, next) => {
       return res.status(502).json({ error: token.error ?? 'Slack token exchange failed' });
     }
 
-    const tenant = await prisma.tenant.update({
-      where: { id: tenantId },
+    let tenant;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        tenant = await prisma.tenant.update({
+          where: { id: tenantId },
+          data: {
+            slackAccessToken: token.access_token,
+            slackWebhookUrl: token.incoming_webhook?.url ?? null,
+            slackChannelId: token.incoming_webhook?.channel_id ?? null,
+          },
+          select: { id: true },
+        });
+        break;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
 
-      data: {
-        slackAccessToken: token.access_token,
-        slackWebhookUrl: token.incoming_webhook?.url ?? null,
-        slackChannelId: token.incoming_webhook?.channel_id ?? null,
-      },
-      select: { id: true },
-    });
+    if (!tenant) {
+      return res.status(500).json({ error: 'Failed to update tenant Slack configuration' });
+    }
 
     return res.status(200).json({ tenantId: tenant.id, installed: true });
+
   } catch (error) {
     return next(error);
   }
