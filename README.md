@@ -1,31 +1,31 @@
 # Outbox — Production-Grade Email Job Scheduler
 
-A robust, production-grade distributed email job scheduler built with TypeScript, Express, BullMQ, Redis, PostgreSQL (Prisma), Ethereal SMTP, and Slack OAuth 2.0 integration.
+A distributed email job scheduler built with TypeScript, Express, BullMQ, Redis, PostgreSQL (Prisma), Ethereal SMTP, and Slack OAuth 2.0 integration.
 
 ---
 
-## 🏗️ Architecture & Stack
+## 🏗️ Tech Stack
 
-- **Backend Framework**: Node.js & Express with TypeScript (`/src`)
-- **Queue Management**: [BullMQ](https://docs.bullmq.io/) backed by Redis for persistent delayed jobs and state management.
-- **Database & ORM**: PostgreSQL hosted on Neon Cloud, managed via [Prisma ORM](https://www.prisma.io/).
-- **Search Engine**: Elasticsearch integration (`/src/services/email-search.ts`) with automatic PostgreSQL fallback search when Elasticsearch is unreachable.
-- **Email Delivery**: Nodemailer configured with Ethereal SMTP test accounts.
-- **Authentication**: Real Google OAuth 2.0 flow with HTTP-only signed session cookies.
-- **Slack Integration**: Real OAuth 2.0 installation flow storing workspace bot tokens and sending rate-limit/batch notifications directly to Slack channels.
-- **Queue Dashboard**: [Bull Board](https://github.com/felixmosh/bull-board) mounted at `/admin/queues` for real-time visual inspection of waiting, active, delayed, and completed jobs.
-- **Frontend SPA**: React with Vite, TypeScript, and Tailwind CSS (`/frontend`).
+- **Backend**: Express.js with TypeScript (`/src`)
+- **Queue**: BullMQ backed by Redis for persistent delayed jobs
+- **Database & ORM**: PostgreSQL (Neon Cloud) managed via Prisma ORM
+- **Search Engine**: Elasticsearch (`/src/services/email-search.ts`) with automatic PostgreSQL search fallback
+- **Email SMTP**: Nodemailer with Ethereal Email test accounts
+- **Authentication**: Google OAuth 2.0 ID Token authentication (`@react-oauth/google` + `google-auth-library`) with HTTP-only signed session cookies
+- **Slack Integration**: Real Slack OAuth 2.0 flow (`user_scope=incoming-webhook`) storing tenant access tokens and webhook URLs for automated alerts
+- **Queue Dashboard**: Bull Board mounted at `/admin/queues`
+- **Frontend SPA**: React with Vite, TypeScript, and Tailwind CSS (`/frontend`)
 
 ---
 
-## ✨ Key Features & Architectural Rules
+## ⚙️ Core Architecture & Features
 
-1. **No Polling Schedulers**: All scheduled emails utilize BullMQ delayed queue items (`queue.add(name, data, { delay: ms, jobId })`). Zero usage of `setInterval`, `cron`, `node-cron`, or in-memory array polling.
-2. **Atomic Hourly Rate Limiting**: Distributed rate-limiting powered by Redis atomic `INCR` + `EXPIRE` operations scoped per sender per hour (`rate:sender:{id}:{hourBucket}`).
-3. **Slack OAuth 2.0 Integration**: Authenticates tenants using Slack OAuth 2.0 authorization code flow. Sends alerts using stored Slack Bot tokens (`chat.postMessage`).
-4. **Strict Idempotency**: Idempotency key generated as `${recipient}:${campaignId}` enforced via deterministic BullMQ `jobId` assignment and a PostgreSQL unique database constraint.
-5. **Startup Reconciliation**: Re-enqueues any `SCHEDULED` emails missing from Redis upon application boot without duplicating existing delayed BullMQ jobs.
-6. **Dual Search Mechanism**: Synchronous indexing to Elasticsearch upon write operations with graceful degradation to PostgreSQL full-text/ILike database queries if Elasticsearch is offline.
+1. **Delayed Job Scheduling**: Email scheduling relies exclusively on BullMQ delayed queue jobs (`queue.add(name, data, { delay, jobId })`). No `setInterval`, `cron`, or polling schedulers are used.
+2. **Atomic Hourly Rate Limiting**: Distributed rate-limiting powered by Redis atomic `INCR` and `EXPIRE` operations scoped per sender per hour (`rate:sender:{senderId}:{hourBucket}`).
+3. **Slack Alerting**: Automatically dispatches notifications via tenant Slack webhooks/Bot API when rate limits are exceeded or batches are delayed.
+4. **Deterministic Idempotency**: Idempotency key generated as `${recipient}:${campaignId}` enforced via BullMQ `jobId` assignment and a PostgreSQL unique constraint. Supports optional `Idempotency-Key` HTTP header on `/api/emails/schedule`.
+5. **Startup Reconciliation**: Re-enqueues any `SCHEDULED` database records missing from Redis upon application boot.
+6. **Search & Fallback**: Indexes emails into Elasticsearch on schedule, gracefully falling back to PostgreSQL `contains` (case-insensitive) database search if Elasticsearch is offline.
 
 ---
 
@@ -34,22 +34,22 @@ A robust, production-grade distributed email job scheduler built with TypeScript
 ### Prerequisites
 
 - Node.js (v18+) & npm
-- PostgreSQL database URL (e.g. Neon PostgreSQL connection string)
-- Redis instance running on `localhost:6379` (or custom host/port)
-- *(Optional)* Elasticsearch running on `localhost:9200`
+- PostgreSQL database URL (Neon PostgreSQL)
+- Redis instance running on `localhost:6379`
+- *(Optional)* Elasticsearch instance running on `localhost:9200` (starts via Docker)
 
 ---
 
-### 1. Environment Setup
+### 1. Setup Environment Variables
 
-Copy `.env.example` to `.env` in both the root directory and the `/frontend` directory:
+Copy `.env.example` to `.env` in the root and `/frontend` directories:
 
 ```bash
 cp .env.example .env
 cp frontend/.env.example frontend/.env
 ```
 
-#### Backend `.env` Configuration
+#### Backend `.env`
 ```env
 GOOGLE_CLIENT_ID=your-google-client-id
 JWT_SECRET=your-random-jwt-secret
@@ -77,7 +77,7 @@ SLACK_OAUTH_STATE_SECRET=your-slack-state-secret
 MAX_EMAILS_PER_HOUR_PER_SENDER=100
 ```
 
-#### Frontend `frontend/.env` Configuration
+#### Frontend `frontend/.env`
 ```env
 VITE_GOOGLE_CLIENT_ID=your-google-client-id
 VITE_API_URL=http://localhost:3000
@@ -85,9 +85,9 @@ VITE_API_URL=http://localhost:3000
 
 ---
 
-### 2. Database Migration & Seeding
+### 2. Database Setup
 
-Sync the database schema with Prisma and populate seed data:
+Push the Prisma schema to PostgreSQL and run the seed script:
 
 ```bash
 npx prisma db push
@@ -96,52 +96,40 @@ npm run prisma:seed
 
 ---
 
-### 3. Running the Application
+### 3. Run Development Services
 
-Run the backend server, queue worker, and frontend dev server:
+Start the backend API, BullMQ worker, and frontend SPA:
 
-#### Terminal 1 — Backend API
 ```bash
+# Terminal 1 — Backend API
 npm run dev
-```
 
-#### Terminal 2 — Queue Worker
-```bash
+# Terminal 2 — Queue Worker Process
 npm run worker
-```
 
-#### Terminal 3 — Frontend SPA
-```bash
+# Terminal 3 — Frontend SPA
 cd frontend
 npm run dev
 ```
 
-The application will be accessible at:
-- **Frontend SPA**: `http://localhost:5173`
-- **Backend API**: `http://localhost:3000`
-- **Bull Board Queue Dashboard**: `http://localhost:3000/admin/queues`
-
 ---
 
-## 📡 API Reference
+## 📡 Actual API Routes
 
-### Authentication
-- `GET /api/auth/google/url` — Returns Google OAuth authorization URL.
-- `GET /api/auth/google/callback` — Handles OAuth callback and sets session cookie.
-- `GET /api/auth/me` — Fetches current authenticated user profile.
-- `POST /api/auth/logout` — Clears active user session.
+### Authentication (`/api/auth`)
+- `POST /api/auth/google` — Authenticates user via Google ID Token (`{ idToken }`) and sets HTTP-only session cookie.
+- `GET /api/auth/me` — Returns current authenticated user profile.
+- `POST /api/auth/logout` — Clears current session cookie.
 
-### Email Operations
-- `POST /api/emails/schedule` — Schedules a single or batch of emails. Accepts `Idempotency-Key` header or body field.
-- `GET /api/emails` — Lists all scheduled/sent emails with pagination.
-- `GET /api/emails/search?q={query}` — Searches emails via Elasticsearch (or PostgreSQL fallback).
-- `GET /api/emails/:id` — Gets detailed metadata for a scheduled email job.
+### Emails (`/api/emails`)
+- `POST /api/emails/schedule` — Schedules single or batch email jobs. Accepts optional `Idempotency-Key` header.
+- `GET /api/emails?status=scheduled` — Fetches scheduled emails.
+- `GET /api/emails?status=sent|failed` — Fetches sent or failed emails.
+- `GET /api/emails/search?q={query}` — Searches emails via Elasticsearch (or Postgres fallback).
 
-### Slack Integration
-- `GET /api/slack/install` — Initiates Slack OAuth 2.0 install flow.
-- `GET /api/slack/callback` — Exchanges authorization code for access token and stores tenant credentials.
-- `GET /api/slack/status` — Checks active Slack workspace connection status.
-- `POST /api/slack/disconnect` — Removes stored Slack OAuth token for the tenant.
+### Slack Integration (`/api/slack`)
+- `GET /api/slack/install` — Initiates Slack OAuth 2.0 installation flow (`user_scope=incoming-webhook`).
+- `GET /api/slack/callback` — Handles OAuth callback, exchanges code for access token/webhook URL, and saves to tenant.
 
-### Monitoring & Dashboard
-- `GET /admin/queues` — Interactive Bull Board dashboard (requires authenticated session).
+### Dashboard
+- `GET /admin/queues` — Bull Board interface for queue inspection.
