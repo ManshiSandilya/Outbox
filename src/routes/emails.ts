@@ -4,6 +4,7 @@ import { EmailStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma';
+import { emailQueue } from '../lib/email-queue';
 
 const MAX_RECIPIENTS_PER_REQUEST = 1_000;
 
@@ -51,17 +52,16 @@ emailRouter.post('/schedule', async (req, res, next) => {
 
     const campaignId = randomUUID();
 
-    // Task 3 will replace this base timestamp with the final rate-limit-aware
-    // staggered schedule. This task intentionally only persists the request.
-    const scheduledTime = body.startTime;
     const createdRows = await prisma.$transaction(
-      body.recipients.map((recipient) =>
+      body.recipients.map((recipient, index) =>
         prisma.email.create({
           data: {
             recipient,
             subject: body.subject,
             body: body.body,
-            scheduledTime,
+            scheduledTime: new Date(
+              body.startTime.getTime() + index * body.delayBetweenMs,
+            ),
             status: EmailStatus.SCHEDULED,
             senderId: sender.id,
             campaignId,
@@ -69,6 +69,25 @@ emailRouter.post('/schedule', async (req, res, next) => {
           },
         }),
       ),
+    );
+
+    const now = Date.now();
+    await Promise.all(
+      createdRows.map((email) => {
+        const sendAt = email.scheduledTime.getTime();
+
+        return emailQueue.add(
+          'send-email',
+          { emailId: email.id },
+          {
+            // BullMQ de-duplicates a queue job with the same ID while it exists.
+            // Using the database idempotency key makes re-enqueue attempts target
+            // the same logical email rather than creating a second send job.
+            jobId: email.idempotencyKey,
+            delay: Math.max(0, sendAt - now),
+          },
+        );
+      }),
     );
 
     return res.status(201).json({
