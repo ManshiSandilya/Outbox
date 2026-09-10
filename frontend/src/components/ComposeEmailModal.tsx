@@ -17,7 +17,7 @@ function extractEmails(value: string): string[] {
 }
 
 export function ComposeEmailModal({ isOpen, onClose, onToast }: ComposeEmailModalProps) {
-  const [senderId, setSenderId] = useState('');
+  const [senderId, setSenderId] = useState('manshisandilya6961@gmail.com');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [recipientsText, setRecipientsText] = useState('');
@@ -73,8 +73,8 @@ export function ComposeEmailModal({ isOpen, onClose, onToast }: ComposeEmailModa
 
   return <Modal isOpen={isOpen} onClose={onClose} title="Compose New Email">
     <form className="space-y-4" onSubmit={handleSubmit}>
-      <label className="block text-sm font-medium text-slate-700">Sender ID
-        <input required value={senderId} onChange={(event) => setSenderId(event.target.value)} placeholder="Configured sender UUID" className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+      <label className="block text-sm font-medium text-slate-700">Sender Email or ID
+        <input required value={senderId} onChange={(event) => setSenderId(event.target.value)} placeholder="Sender email address or UUID" className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
       </label>
       <label className="block text-sm font-medium text-slate-700">Subject
         <input required maxLength={998} value={subject} onChange={(event) => setSubject(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />

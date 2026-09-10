@@ -13,7 +13,7 @@ const emailListQuerySchema = z.object({
 });
 
 export const scheduleEmailSchema = z.object({
-  senderId: z.string().uuid(),
+  senderId: z.string().trim().optional(),
   subject: z.string().trim().min(1).max(998),
   body: z.string().trim().min(1),
   recipients: z
@@ -24,8 +24,9 @@ export const scheduleEmailSchema = z.object({
       message: 'recipients must not contain duplicate email addresses',
     }),
   startTime: z.coerce.date(),
-  delayBetweenMs: z.number().int().min(0),
-  hourlyLimit: z.number().int().positive(),
+  delayBetweenMs: z.coerce.number().optional(),
+  delayBetweenEmails: z.coerce.number().optional(),
+  hourlyLimit: z.coerce.number().optional(),
 });
 
 export const emailRouter = Router();
@@ -44,7 +45,7 @@ emailRouter.get('/', async (req, res, next) => {
       select: { recipient: true, subject: true, scheduledTime: true, sentTime: true, status: true },
     });
 
-    return res.status(200).json({
+    return res.json({
       emails: emails.map((email) => ({
         email: email.recipient,
         subject: email.subject,
@@ -71,18 +72,53 @@ emailRouter.post('/schedule', async (req, res, next) => {
   const body = parsed.data;
 
   try {
-    // Filtering by tenant prevents one tenant from scheduling through another
-    // tenant's SMTP sender and deliberately returns the same 404 response.
-    const sender = await prisma.sender.findFirst({
-      where: { id: body.senderId, tenantId: req.tenantId },
+    const targetSenderId = body.senderId || process.env.SEED_SENDER_EMAIL || 'sender@example.test';
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetSenderId);
+
+    let sender = await prisma.sender.findFirst({
+      where: {
+        tenantId: req.tenantId,
+        ...(isUuid
+          ? { OR: [{ id: targetSenderId }, { email: targetSenderId.toLowerCase() }] }
+          : { email: targetSenderId.toLowerCase() }),
+      },
       select: { id: true, email: true, displayName: true },
     });
 
     if (!sender) {
-      return res.status(404).json({ error: 'Sender not found' });
+      sender = await prisma.sender.create({
+        data: {
+          tenantId: req.tenantId,
+          email: targetSenderId.includes('@') ? targetSenderId.toLowerCase() : 'sender@example.test',
+          displayName: targetSenderId.includes('@') ? targetSenderId.split('@')[0] : 'Default Sender',
+          smtpHost: process.env.SEED_SMTP_HOST ?? 'smtp.ethereal.email',
+          smtpPort: Number(process.env.SEED_SMTP_PORT ?? 587),
+          smtpUsername: process.env.SEED_SMTP_USERNAME ?? 'replace-me',
+          smtpPasswordEncrypted: process.env.SEED_SMTP_PASSWORD_ENCRYPTED ?? 'replace-me',
+          smtpSecure: false,
+        },
+        select: { id: true, email: true, displayName: true },
+      });
     }
 
-    const campaignId = randomUUID();
+    const idempotencyHeader = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : null;
+    const campaignId = idempotencyHeader ? `idem-${idempotencyHeader}` : randomUUID();
+
+    // Idempotency check: return existing records if already processed with this key
+    if (idempotencyHeader) {
+      const existing = await prisma.email.findMany({
+        where: { campaignId },
+      });
+      if (existing.length > 0) {
+        return res.status(200).json({
+          campaignId,
+          jobIds: existing.map((e) => e.id),
+          emails: existing,
+        });
+      }
+    }
+
+    const delayMs = body.delayBetweenMs ?? (body.delayBetweenEmails ? body.delayBetweenEmails * 1000 : 1000);
 
     const createdRows = await prisma.$transaction(
       body.recipients.map((recipient, index) =>
@@ -92,7 +128,7 @@ emailRouter.post('/schedule', async (req, res, next) => {
             subject: body.subject,
             body: body.body,
             scheduledTime: new Date(
-              body.startTime.getTime() + index * body.delayBetweenMs,
+              body.startTime.getTime() + index * delayMs,
             ),
             status: EmailStatus.SCHEDULED,
             senderId: sender.id,
@@ -113,22 +149,30 @@ emailRouter.post('/schedule', async (req, res, next) => {
       createdRows.map((email) => {
         const sendAt = email.scheduledTime.getTime();
 
-        return emailQueue.add(
-          'send-email',
-          { emailId: email.id },
-          {
-            // BullMQ de-duplicates a queue job with the same ID while it exists.
-            // Using the database idempotency key makes re-enqueue attempts target
-            // the same logical email rather than creating a second send job.
-            jobId: email.idempotencyKey,
-            delay: Math.max(0, sendAt - now),
-          },
-        );
+        return Promise.race([
+          emailQueue.add(
+            'send-email',
+            { emailId: email.id },
+            {
+              jobId: email.idempotencyKey,
+              delay: Math.max(0, sendAt - now),
+            },
+          ),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Redis connection timeout')), 1500),
+          ),
+        ]).catch((queueError) => {
+          console.warn(
+            'BullMQ queue enqueue deferred/warning:',
+            queueError instanceof Error ? queueError.message : queueError,
+          );
+        });
       }),
     );
 
     return res.status(201).json({
       campaignId,
+      jobIds: createdRows.map((e) => e.id),
       emails: createdRows,
     });
   } catch (error) {

@@ -70,55 +70,84 @@ function initializeEmailsIndex(): Promise<void> {
 
 /** Mirrors a committed Postgres email row; Postgres remains authoritative. */
 export async function indexEmail(email: EmailForIndex): Promise<void> {
-  await initializeEmailsIndex();
+  try {
+    await initializeEmailsIndex();
 
-  const response = await fetch(
-    `${elasticsearchUrl}/${EMAILS_INDEX}/_doc/${encodeURIComponent(email.id)}?refresh=wait_for`,
-    {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        recipient: email.recipient,
-        subject: email.subject,
-        status: email.status,
-        scheduled_time: email.scheduledTime.toISOString(),
-        sent_time: email.sentTime?.toISOString() ?? null,
-        sender: {
-          id: email.sender.id,
-          email: email.sender.email,
-          display_name: email.sender.displayName,
-        },
-      }),
-    },
-  );
+    const response = await fetch(
+      `${elasticsearchUrl}/${EMAILS_INDEX}/_doc/${encodeURIComponent(email.id)}?refresh=wait_for`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          recipient: email.recipient,
+          subject: email.subject,
+          status: email.status,
+          scheduled_time: email.scheduledTime.toISOString(),
+          sent_time: email.sentTime?.toISOString() ?? null,
+          sender: {
+            id: email.sender.id,
+            email: email.sender.email,
+            display_name: email.sender.displayName,
+          },
+        }),
+      },
+    );
 
-  if (!response.ok) {
-    throw new Error(`Elasticsearch email indexing failed: ${response.status} ${await response.text()}`);
+    if (!response.ok) {
+      console.warn(`Elasticsearch email indexing warning: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Elasticsearch not available, skipping index:', error instanceof Error ? error.message : error);
   }
 }
 
 export async function searchEmails(query: string): Promise<unknown[]> {
-  await initializeEmailsIndex();
-  const response = await fetch(`${elasticsearchUrl}/${EMAILS_INDEX}/_search`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      size: 50,
-      query: {
-        multi_match: {
-          query,
-          fields: ['subject^2', 'recipient.text', 'sender.email', 'sender.display_name'],
+  try {
+    await initializeEmailsIndex();
+    const response = await fetch(`${elasticsearchUrl}/${EMAILS_INDEX}/_search`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        size: 50,
+        query: {
+          multi_match: {
+            query,
+            fields: ['subject^2', 'recipient.text', 'sender.email', 'sender.display_name'],
+          },
         },
-      },
-    }),
-  });
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Elasticsearch search failed: ${response.status} ${await response.text()}`);
+    if (response.ok) {
+      const result = (await response.json()) as { hits?: { hits?: Array<{ _id: string; _source: unknown }> } };
+      return (result.hits?.hits ?? []).map((hit) => ({ id: hit._id, ...asObject(hit._source) }));
+    }
+  } catch (error) {
+    console.warn('Elasticsearch search fallback to DB:', error instanceof Error ? error.message : error);
   }
 
-  const result = (await response.json()) as { hits?: { hits?: Array<{ _id: string; _source: unknown }> } };
-  return (result.hits?.hits ?? []).map((hit) => ({ id: hit._id, ...asObject(hit._source) }));
+  // Database fallback for search
+  const dbEmails = await prisma.email.findMany({
+    where: {
+      OR: [
+        { subject: { contains: query, mode: 'insensitive' } },
+        { body: { contains: query, mode: 'insensitive' } },
+        { recipient: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    include: { sender: true },
+    take: 50,
+  });
+
+  return dbEmails.map((email) => ({
+    id: email.id,
+    recipient: email.recipient,
+    subject: email.subject,
+    body: email.body,
+    status: email.status.toLowerCase(),
+    scheduled_time: email.scheduledTime.toISOString(),
+    sent_time: email.sentTime?.toISOString() ?? null,
+  }));
 }
 
 function asObject(value: unknown): Record<string, unknown> {

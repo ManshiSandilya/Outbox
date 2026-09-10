@@ -21,7 +21,21 @@ app.use((req, res, next) => {
   return next();
 });
 
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { emailQueue } from './lib/email-queue';
+
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+createBullBoard({
+  queues: [new BullMQAdapter(emailQueue)],
+  serverAdapter,
+});
+
 app.use(express.json());
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.use('/admin/queues', serverAdapter.getRouter());
 app.use(attachTenant);
 app.use('/api/auth', authRouter);
 app.use('/api/emails', emailRouter);
