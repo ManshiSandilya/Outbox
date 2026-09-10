@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { prisma } from '../lib/prisma';
 import { emailQueue } from '../lib/email-queue';
+import { indexEmail, searchEmails } from '../services/email-search';
 
 const MAX_RECIPIENTS_PER_REQUEST = 1_000;
 
@@ -43,7 +44,7 @@ emailRouter.post('/schedule', async (req, res, next) => {
     // tenant's SMTP sender and deliberately returns the same 404 response.
     const sender = await prisma.sender.findFirst({
       where: { id: body.senderId, tenantId: req.tenantId },
-      select: { id: true },
+      select: { id: true, email: true, displayName: true },
     });
 
     if (!sender) {
@@ -72,6 +73,10 @@ emailRouter.post('/schedule', async (req, res, next) => {
       ),
     );
 
+    await Promise.all(
+      createdRows.map((email) => indexEmail({ ...email, sender })),
+    );
+
     const now = Date.now();
     await Promise.all(
       createdRows.map((email) => {
@@ -95,6 +100,19 @@ emailRouter.post('/schedule', async (req, res, next) => {
       campaignId,
       emails: createdRows,
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+emailRouter.get('/search', async (req, res, next) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (!q || q.length > 500) {
+    return res.status(400).json({ error: 'q is required and must be at most 500 characters' });
+  }
+
+  try {
+    return res.status(200).json({ emails: await searchEmails(q) });
   } catch (error) {
     return next(error);
   }

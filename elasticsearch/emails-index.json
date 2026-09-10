@@ -1,0 +1,27 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "recipient": {
+        "type": "keyword",
+        "fields": {
+          "text": { "type": "text" }
+        }
+      },
+      "subject": { "type": "text" },
+      "status": { "type": "keyword" },
+      "scheduled_time": { "type": "date" },
+      "sent_time": { "type": "date" },
+      "sender": {
+        "properties": {
+          "id": { "type": "keyword" },
+          "email": { "type": "keyword" },
+          "display_name": { "type": "text" }
+        }
+      }
+    }
+  }
+}

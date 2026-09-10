@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer';
 
 import { emailQueue, redisConnection } from '../lib/email-queue';
 import { prisma } from '../lib/prisma';
-import { reindexEmail } from '../services/email-search';
+import { indexEmail } from '../services/email-search';
 import { reconcileScheduledEmailsOnStartup } from '../services/reconcile-scheduled-emails';
 import { notifySlack } from '../services/slack';
 
@@ -94,20 +94,22 @@ async function processSendEmail(
       text: email.body,
     });
 
-    await prisma.email.update({
+    const sentEmail = await prisma.email.update({
       where: { id: email.id },
       data: { status: 'SENT', sentTime: new Date(), failureReason: null },
+      include: { sender: true },
     });
-    await reindexEmail(email.id);
+    await indexEmail(sentEmail);
 
     return { sent: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown SMTP error';
-    await prisma.email.update({
+    const failedEmail = await prisma.email.update({
       where: { id: email.id },
       data: { status: 'FAILED', failureReason: message, sentTime: null },
+      include: { sender: true },
     });
-    await reindexEmail(email.id);
+    await indexEmail(failedEmail);
     throw error;
   }
 }
