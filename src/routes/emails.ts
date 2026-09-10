@@ -65,6 +65,7 @@ emailRouter.post('/schedule', async (req, res, next) => {
             status: EmailStatus.SCHEDULED,
             senderId: sender.id,
             campaignId,
+            sequence: index,
             idempotencyKey: `${recipient}:${campaignId}`,
           },
         }),

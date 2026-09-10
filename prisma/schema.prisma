@@ -63,6 +63,7 @@ model Email {
   status         EmailStatus @default(SCHEDULED)
   senderId       String      @map("sender_id") @db.Uuid
   campaignId     String      @map("campaign_id") @db.VarChar(255)
+  sequence       Int         @default(0)
   idempotencyKey String      @unique @map("idempotency_key") @db.VarChar(512)
   failureReason  String?     @map("failure_reason") @db.Text
   createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -72,6 +73,7 @@ model Email {
   @@index([status, scheduledTime])
   @@index([senderId, status])
   @@index([campaignId])
+  @@unique([campaignId, sequence])
   @@map("emails")
 }
 
