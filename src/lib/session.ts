@@ -43,7 +43,7 @@ export function readSessionToken(token: string | undefined): SessionPayload | un
 export const sessionCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true',
-  sameSite: (process.env.NODE_ENV === 'production' || process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'lax') as const,
+  sameSite: (process.env.NODE_ENV === 'production' || process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'lax') as 'none' | 'lax',
   maxAge: SESSION_TTL_SECONDS * 1_000,
   path: '/',
 };
