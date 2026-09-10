@@ -4,6 +4,7 @@ import nodemailer from 'nodemailer';
 import { emailQueue, redisConnection } from '../lib/email-queue';
 import { prisma } from '../lib/prisma';
 import { reindexEmail } from '../services/email-search';
+import { reconcileScheduledEmailsOnStartup } from '../services/reconcile-scheduled-emails';
 import { notifyRateLimitReached } from '../services/slack';
 
 type SendEmailJob = { emailId: string };
@@ -117,3 +118,8 @@ export const sendEmailWorker = new Worker<SendEmailJob>(
   processSendEmail,
   { connection: redisConnection, concurrency: workerConcurrency },
 );
+
+void reconcileScheduledEmailsOnStartup().catch((error: unknown) => {
+  console.error('Scheduled-email reconciliation failed during worker startup', error);
+  process.exitCode = 1;
+});
